@@ -1,0 +1,37 @@
+ 
+docker run --rm -it archlinux:base-devel-20220320.0.50753 /bin/bash
+
+
+docker build -t archlinux_custom:base-devel-20220320.0.50753 .
+
+docker run --rm -it --env="DISPLAY=${DISPLAY}" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" archlinux_custom:base-devel-20220320.0.50753 firefox
+
+
+
+docker cp b0c695abc32a:/var/cache/pacman/pkg/ /home/simha_personal_data/programming_arch_firefox/extra/Unsorted/vid/Docker_images_creating_dontdelete/archlinux_new_image/pkg
+
+
+docker run --rm -it --network=host --env DISPLAY=$DISPLAY  --privileged --volume="$HOME/.Xauthority:/root/.Xauthority:rw" -v /tmp/.X11-unix:/tmp/.X11-unix --rm archlinux_custom:base-devel-20220320.0.50753 sh -c "firefox"
+
+
+https://blog.rabin.io/linux/running-java-gui-application-in-docker
+Running Java GUI application in Docker
+
+docker run --rm -it -env _JAVA_OPTIONS='-Dawt.useSystemAAFontSettings=lcd -Dswing.defaultlaf=com.sun.java.swing.plaf.gtk.GTKLookAndFeel' --env="DISPLAY=${DISPLAY}" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --volume="/home/simha_personal_data/programming_arch_firefox/extra/Unsorted/vid/dbvis/.dbvis1:/home/simha/.dbvis:rw" archlinux_custom:base-devel-20220320.0.50753 dbvis
+
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+
+
+
+$ docker run --rm -it \
+--env="_JAVA_OPTIONS='-Dawt.useSystemAAFontSettings=lcd'" \
+--env="DISPLAY=${DISPLAY}" \
+--volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+--volume="/home/simha_personal_data/programming_arch_firefox/extra/Unsorted/vid/dbvis/.dbvis1:/home/simha/.dbvis:rw" \
+--volume="/home/simha_personal_data/programming_arch_firefox/extra/Unsorted/vid/web_dev/claim_t/Claim_Reversal_Notes/jupyter_notebook:/home/simha/csv_files:rw" \
+archlinux_custom:base-devel-20220320.0.50753 dbvis
+
