@@ -1,0 +1,483 @@
+sudo iptables -t nat -L -n
+
+sudo iptables-save -t nat
+
+*nat
+:PREROUTING ACCEPT [6:192]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [256:17809]
+:POSTROUTING ACCEPT [256:17809]
+:DOCKER - [0:0]
+-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
+-A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER
+-A POSTROUTING -s 172.19.0.0/16 ! -o br-156bdbc10e3d -j MASQUERADE
+-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+-A POSTROUTING -s 172.18.0.0/16 ! -o br-7c842c08107b -j MASQUERADE
+-A DOCKER -i br-156bdbc10e3d -j RETURN
+-A DOCKER -i docker0 -j RETURN
+-A DOCKER -i br-7c842c08107b -j RETURN
+COMMIT
+# Completed on Thu Sep 15 10:52:00 2022
+
+
+
+ $ docker run --rm byrnedo/alpine-curl http://www.myip.ch
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   202  100   202    0     0    462      0 --:--:-- --:--:-- --:--:--   462
+<html>
+<head>
+<title>Current IP Check</title>
+</head>
+<body>
+Current IP Address: 223.187.25.132<br/><br/>
+Powered by <a href="http://www.microsolutions.ch">Micro Solutions AG</a>
+</body>
+</html>%  
+
+
+
+# Create new docker network with ip masquerade as false
+
+docker network create --attachable --opt ‘com.docker.network.bridge.name=bridge-coi’ --opt ‘com.docker.network.bridge.enable_ip_masquerade=false’ bridge-coi
+
+
+# check docker network ip4
+
+$ docker network inspect bridge-coi
+[
+    {
+        "Name": "bridge-coi",
+        "Id": "156bdbc10e3da729554ae0f1d37d350d8d48d3299184ecab11d24d4e2c104ddd",
+        "Created": "2022-09-15T10:30:10.546227153+05:30",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.19.0.0/16",
+                    "Gateway": "172.19.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": true,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {
+            "‘com.docker.network.bridge.enable_ip_masquerade": "false’",
+            "‘com.docker.network.bridge.name": "bridge-coi’"
+        },
+        "Labels": {}
+    }
+
+# change postrouting
+
+sudo iptables -t nat -A POSTROUTING -s 172.19.0.0/16 ! -o bridge-coi -j SNAT --to-source 192.168.55.1
+
+sudo iptables -t nat -A POSTROUTING -s 172.19.0.0/16 ! -o bridge-coi -j SNAT --to-source 223.187.25.132
+
+# check iptables
+
+ $ sudo iptables -t nat -L -n
+Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination         
+DOCKER     all  --  0.0.0.0/0            0.0.0.0/0            ADDRTYPE match dst-type LOCAL
+
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination         
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination         
+DOCKER     all  --  0.0.0.0/0           !127.0.0.0/8          ADDRTYPE match dst-type LOCAL
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination         
+MASQUERADE  all  --  172.19.0.0/16        0.0.0.0/0           
+MASQUERADE  all  --  172.17.0.0/16        0.0.0.0/0           
+MASQUERADE  all  --  172.18.0.0/16        0.0.0.0/0           
+SNAT       all  --  172.18.0.0/16        0.0.0.0/0            to:192.168.55.1
+SNAT       all  --  172.19.0.0/16        0.0.0.0/0            to:192.168.55.1
+
+Chain DOCKER (2 references)
+target     prot opt source               destination         
+RETURN     all  --  0.0.0.0/0            0.0.0.0/0           
+RETURN     all  --  0.0.0.0/0            0.0.0.0/0           
+RETURN     all  --  0.0.0.0/0            0.0.0.0/0 
+
+
+
+$ docker run --rm --network bridge-coi byrnedo/alpine-curl http://www.myip.ch
+
+
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0<html>
+<head>
+<title>Current IP Check</title>
+</head>
+<body>
+Current IP Address: 223.187.25.132<br/><br/>
+Powered by <a href="http://www.microsolutions.ch">Micro Solutions AG</a>
+</body>
+100   202  100   202    0     0    429      0 --:--:-- --:--:-- --:--:--   430
+
+
+
+HOW TO DELETE AN IP tables
+
+
+$ sudo iptables -t nat -v -L -n --line-number
+
+-t nat : Select nat table.
+-v : Verbose output.
+-L : List all rules in the selected chain. In other words, show all rules in nat table.
+-n : Numeric output. IP addresses and port numbers will be printed in numeric format.
+--line-number : When listing rules, add line numbers to the beginning of each rule, corresponding to that rule’s position in the chain. You need to use line numbers to delete nat rules.
+
+$ sudo iptables -t nat -D <RULENAME> <LINENUMBER>
+
+example: sudo iptables -t nat -D POSTROUTING 4
+
+
+
+docker network create --attachable --opt ‘com.docker.network.bridge.name=bridge-test’ --opt ‘com.docker.network.bridge.enable_ip_masquerade=false’ bridge-test
+
+docker network inspect bridge-test
+[
+    {
+        "Name": "bridge-test",
+        "Id": "ada8ead17f3c79deaeb35aab34a0b9be22b7d87b79427f3ad8b466d46173cb4e",
+        "Created": "2022-09-15T11:05:07.238131995+05:30",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.20.0.0/16",
+                    "Gateway": "172.20.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": true,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {
+            "‘com.docker.network.bridge.enable_ip_masquerade": "false’",
+            "‘com.docker.network.bridge.name": "bridge-test’"
+        },
+        "Labels": {}
+    }
+]
+
+sudo iptables -t nat -v -L -n --line-number
+
+sudo iptables -t nat -A POSTROUTING -s 172.20.0.0/16 ! -o br-ada8ead17f3c -j SNAT --to-source 192.168.55.1
+
+sudo iptables -t nat -D POSTROUTING 1
+
+docker run --rm --network bridge-test byrnedo/alpine-curl http://www.myip.ch
+
+
+#####################################
+
+
+
+ $ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp44s0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default qlen 1000
+    link/ether 7c:8a:e1:93:a5:75 brd ff:ff:ff:ff:ff:ff
+4: wlp0s20f3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether dc:21:48:5d:82:6b brd ff:ff:ff:ff:ff:ff
+    inet 192.168.43.143/24 brd 192.168.43.255 scope global dynamic noprefixroute wlp0s20f3
+       valid_lft 2318sec preferred_lft 2318sec
+    inet6 2401:4900:4fc9:9b95:5748:de8e:ab6e:14ee/64 scope global temporary dynamic 
+       valid_lft 3145sec preferred_lft 3145sec
+    inet6 2401:4900:4fc9:9b95:833f:3ec9:da5f:6614/64 scope global dynamic mngtmpaddr noprefixroute 
+       valid_lft 3145sec preferred_lft 3145sec
+    inet6 fe80::613c:4a38:3533:eaad/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+6: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:c2:f5:f0:33 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:c2ff:fef5:f033/64 scope link 
+       valid_lft forever preferred_lft forever
+19: wlx00e020306060: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether 00:e0:20:30:60:60 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.55.104/24 brd 192.168.55.255 scope global dynamic noprefixroute wlx00e020306060
+       valid_lft 26sec preferred_lft 26sec
+    inet6 fe80::a62d:6e4a:7b6f:2303/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+44: br-14af5c70de1c: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:64:57:c3:3f brd ff:ff:ff:ff:ff:ff
+    inet 172.21.0.1/16 brd 172.21.255.255 scope global br-14af5c70de1c
+       valid_lft forever preferred_lft forever
+
+
+
+docker network create --attachable --opt ‘com.docker.network.bridge.name=bridge-vpn’ --opt ‘com.docker.network.bridge.enable_ip_masquerade=false’ bridge-vpn
+
+docker network inspect bridge-vpn
+
+ $ docker network inspect bridge-vpn
+[
+    {
+        "Name": "bridge-vpn",
+        "Id": "14af5c70de1c6f5c2d5d243930e197dfb21c36af2ca73d8e0308aba46f49ff83",
+        "Created": "2022-09-15T11:42:54.336337335+05:30",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.21.0.0/16",
+                    "Gateway": "172.21.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": true,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {
+            "‘com.docker.network.bridge.enable_ip_masquerade": "false’",
+            "‘com.docker.network.bridge.name": "bridge-vpn’"
+        },
+        "Labels": {}
+    }
+]
+
+
+ $ ip route
+default via 192.168.43.1 dev wlp0s20f3 proto dhcp metric 603 
+default via 192.168.55.1 dev wlx00e020306060 proto dhcp metric 604 
+169.254.0.0/16 dev wlp0s20f3 scope link metric 1000 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.21.0.0/16 dev br-14af5c70de1c proto kernel scope link src 172.21.0.1 linkdown 
+192.168.43.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.43.143 metric 603 
+192.168.55.0/24 dev wlx00e020306060 proto kernel scope link src 192.168.55.104 metric 604 
+
+
+
+sudo iptables -t nat -v -L -n --line-number
+
+sudo iptables -t nat -A POSTROUTING -s 172.21.0.0/16 ! -o br-14af5c70de1c -j SNAT --to-source 223.187.25.132
+
+sudo iptables -t nat -v -L -n --line-number
+
+[ 11:57AM ]  [ administrator@NWLT2218:~ ]
+sudo iptables -t nat -v -L -n --line-number
+
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1       18  2250 DOCKER     all  --  *      *       0.0.0.0/0            0.0.0.0/0            ADDRTYPE match dst-type LOCAL
+
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1        0     0 DOCKER     all  --  *      *       0.0.0.0/0           !127.0.0.0/8          ADDRTYPE match dst-type LOCAL
+
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1       14   813 MASQUERADE  all  --  *      !docker0  172.17.0.0/16        0.0.0.0/0           
+2        0     0 SNAT       all  --  *      !br-14af5c70de1c  172.21.0.0/16        0.0.0.0/0            to:192.168.55.104
+
+Chain DOCKER (2 references)
+num   pkts bytes target     prot opt in     out     source               destination         
+1        0     0 RETURN     all  --  br-14af5c70de1c *       0.0.0.0/0            0.0.0.0/0           
+2        0     0 RETURN     all  --  docker0 *       0.0.0.0/0            0.0.0.0/0   
+
+
+sudo iptables -t nat -D POSTROUTING <LINENUMNBER> (IF needed delete)
+
+
+docker run --rm --network bridge-vpn byrnedo/alpine-curl http://www.myip.ch
+
+
+
+ip rule add from 172.20.0.0/16 tab bridge-vpn
+ip route add 172.20.0.0/16 dev wlx00e020306060 tab bridge-vpn
+ip route add default via 192.168.55.1 dev wlx00e020306060 tab bridge-vpn
+
+
+
+
+This is all managed by host kernel. It applies NAT rules to outgoing packets and remembers to replace its ip with container's ip when the response is received.
+
+
+
+
+iptables -A FORWARD -p tcp -j LOG --log-tcp-options --log-prefix "FORWARD packets"  --log-level debug
+
+
+iptables -A INPUT -p tcp -j LOG --log-tcp-options --log-prefix "INPUT packets"  --log-level debug
+
+
+iptables -A P -p tcp -j LOG --log-tcp-options --log-prefix "P packets"  --log-level debug
+
+
+
+sudo iptables -N LOGGING
+sudo iptables -A INPUT -j LOGGING
+sudo iptables -A LOGGING -j LOG --log-prefix "IPTables-Dropped: " --log-level 4
+sudo iptables -A LOGGING -j DROP
+
+
+
+sudo iptables -t nat -v -L -n --line-number
+
+sudo iptables -t nat -I PREROUTING -j LOG --log-prefix "IPTables-PREROUTING: " --log-level 4
+sudo iptables -t nat -I POSTROUTING -j LOG --log-prefix "IPTables-POSTROUTING: " --log-level 4
+sudo iptables -t nat -I OUTPUT -j LOG --log-prefix "IPTables-OUTPUT: " --log-level 4
+sudo iptables -t nat -I INPUT -j LOG --log-prefix "IPTables-INPUT: " --log-level 4
+
+
+
+
+
+#####################################################################
+
+
+[  3:10PM ]  [ administrator@NWLT2218:~ ]
+ $ ip route
+default via 192.168.43.1 dev wlp0s20f3 proto dhcp metric 603 
+default via 192.168.55.1 dev wlx00e020306060 proto dhcp metric 604 
+169.254.0.0/16 dev wlp0s20f3 scope link metric 1000 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.21.0.0/16 dev br-14af5c70de1c proto kernel scope link src 172.21.0.1 linkdown 
+192.168.43.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.43.143 metric 603 
+
+
+
+sudo ip route add default via 192.168.55.1 dev wlx00e020306060 table 1001
+
+
+sudo iptables -t mangle -A PREROUTING -i wlx00e020306060 -j MARK --set-xmark 0x1001/0xffffffff
+sudo iptables -t mangle -A PREROUTING -i wlx00e020306060 -j CONNMARK --save-mark --nfmask 0xffffffff --ctmask 0xffffffff
+
+
+sudo ip rule add from all fwmark 0x1001 lookup 1001
+
+
+sudo iptables -w -t mangle -A PREROUTING -i br-14af5c70de1c -m conntrack --ctstate RELATED,ESTABLISHED -j CONNMARK --restore-mark --nfmask 0xffffffff --ctmask 0xffffffff
+
+
+sudo iptables -t nat -v -L -n --line-number
+
+
+sudo iptables -t mangle -v -L -n --line-number
+
+
+sudo iptables -t nat -D POSTROUTING 3
+
+
+
+sudo iptables -t nat -A POSTROUTING -s 172.21.0.0/16 ! -o br-14af5c70de1c -j MASQUERADE
+
+
+
+
+
+docker network create -d bridge \
+--subnet=172.30.0.32/24 \
+--opt com.docker.network.bridge.enable_ip_masquerade=true \
+--opt com.docker.network.bridge.host_binding_ipv4=192.168.55.1 \
+--opt com.docker.network.bridge.name=docker1 \
+docker1
+
+
+
+
+############################################################################
+###########################################################################
+FINALLY WORKS
+##########################################################################
+#########################################################################
+
+# Routing packets from a specific Docker container through a specific outgoing interface
+
+https://stewartadam.io/blog/2019/04/04/routing-packets-specific-docker-container-through-specific-outgoing-interface
+
+
+# create a new Docker-managed, bridged connection
+# 'avpn' because docker chooses the default route alphabetically
+
+DOCKER_SUBNET="172.57.0.0/16"
+docker network create --subnet=$DOCKER_SUBNET -d bridge -o com.docker.network.bridge.name=docker_vpn avpn
+
+
+# mark packets from the docker_vpn interface during prerouting, to destine them for non-default routing decisions
+# 0x25 is arbitrary, any hex (int mask) should work
+
+sudo iptables -t mangle -I PREROUTING -i docker_vpn ! -d $DOCKER_SUBNET -j MARK --set-mark 0x25
+
+# create new routing table - 100 is arbitrary, any integer 1-252
+sudo ip route add default via 192.168.55.1 dev wlx00e020306060 table vpn
+
+
+# configure rules for when to route packets using the new table
+
+ip rule add from all fwmark 0x25 lookup vpn
+
+
+# setup a different default route on the new routing table
+# this route can differ from the normal routing table's default route
+
+sudo ip route add default via 192.168.55.1 dev wlx00e020306060 table vpn
+
+docker run --rm --network avpn byrnedo/alpine-curl http://www.myip.ch
+
+
+
+
+#########################
+ip route
+############################
+
+ $ cat /etc/iproute2/rt_tables
+#
+# reserved values
+#
+255	local
+254	main
+253	default
+0	unspec
+#
+# local
+#
+#1	inr.ruhep
+100 vpn
+
+
+
+~# ip route show table {table name}

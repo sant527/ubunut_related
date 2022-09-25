@@ -1,0 +1,1 @@
+. /home/administrator/django_video_downloader/.venv/bin/activate &&  cd /home/administrator/django_video_downloader/download && ./manage.py runserver 0.0.0.0:8000

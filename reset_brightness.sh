@@ -1,0 +1,1 @@
+xcalib -clear && sudo brightnessctl set 100%
