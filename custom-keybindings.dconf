@@ -1,0 +1,59 @@
+[custom0]
+binding='<Primary><Alt>s'
+command='flameshot gui --path  /home/administrator/Pictures/flameshot'
+name='flameshot'
+
+[custom1]
+binding='<Super>v'
+command='sh /home/administrator/.public_html/open_test.sh'
+name='subl'
+
+[custom10]
+binding='<Alt>5'
+command='xcalib -contrast 95 -alter'
+name='xcalib contrast'
+
+[custom11]
+binding='<Alt>6'
+command='xcalib -clear'
+name='xcalib_reset'
+
+[custom2]
+binding='<Primary><Super>c'
+command='sh /home/administrator/.public_html/clean_wget.sh'
+name='clean'
+
+[custom3]
+binding='<Super>e'
+command='pcmanfm'
+name='pcmanfm'
+
+[custom4]
+binding='<Alt>2'
+command='sh /home/administrator/.public_html/volup.sh'
+name='volup'
+
+[custom5]
+binding='<Alt>1'
+command='sh /home/administrator/.public_html/voldown.sh'
+name='voldown'
+
+[custom6]
+binding='<Primary><Super>Left'
+command='xdotool mousemove 1000 5 click 1'
+name='screen_left'
+
+[custom7]
+binding='<Primary><Super>Right'
+command='xdotool mousemove 2420 5 click 1'
+name='screen_right'
+
+[custom8]
+binding='<Alt>4'
+command='sudo brightnessctl set 3%+'
+name='brightness_up'
+
+[custom9]
+binding='<Alt>3'
+command='sudo brightnessctl set 3%-'
+name='brightness_down'
